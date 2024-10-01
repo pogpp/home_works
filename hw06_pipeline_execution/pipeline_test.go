@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/require" //nolint:depguard
 )
 
 const (
@@ -35,6 +35,35 @@ func TestPipeline(t *testing.T) {
 		g("Adder (+ 100)", func(v interface{}) interface{} { return v.(int) + 100 }),
 		g("Stringifier", func(v interface{}) interface{} { return strconv.Itoa(v.(int)) }),
 	}
+
+	t.Run("empty stages list", func(t *testing.T) {
+		in := make(Bi)
+		data := []string{"a", "b", "c", "d", "e"}
+
+		go func() {
+			for _, v := range data {
+				in <- v
+			}
+			close(in)
+		}()
+
+		result := make([]string, 0, len(data))
+		start := time.Now()
+		for s := range ExecutePipeline(in, nil, []Stage{}...) {
+			result = append(result, s.(string))
+		}
+		elapsed := time.Since(start)
+
+		require.Equal(t, data, result)
+		require.Less(t,
+			int64(elapsed),
+			int64(sleepPerStage)+int64(fault))
+	})
+
+	t.Run("nil check", func(t *testing.T) {
+		res := ExecutePipeline(nil, nil, stages...)
+		require.Nil(t, res)
+	})
 
 	t.Run("simple case", func(t *testing.T) {
 		in := make(Bi)
